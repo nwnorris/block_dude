@@ -128,27 +128,27 @@ class BD_Level():
 		potential_y = self.player_y + 1
 
 		if(potential_x < self.width and potential_x >= 0 and potential_y >= 0 and potential_y < self.height):
-			if(self.at(potential_x, self.player_y).type == 3 or self.at(potential_x, self.player_y).type == 1):
+			potential_type = self.at(potential_x, self.player_y).type
+			if((potential_type == 3 or potential_type == 1) and (self.at(potential_x, potential_y).type == 0 or self.at(potential_x, potential_y).type == 4)):
+					current_wood = (self.player_x, self.player_y+1)
+					current_player = (self.player_x, self.player_y)
 
-				current_wood = (self.player_x, self.player_y+1)
-				current_player = (self.player_x, self.player_y)
-
-				#Can we move both the player and the block?
-				if(self.player_holding):
-					if(potential_y+1 < self.height):
-						if(self.at(potential_x, potential_y + 1).type == 0):
-							self.at(potential_x, potential_y +1).type = 3
-							self.clear(current_wood)
+					#Can we move both the player and the block?
+					if(self.player_holding):
+						if(potential_y+1 < self.height):
+							if(self.at(potential_x, potential_y + 1).type == 0):
+								self.at(potential_x, potential_y +1).type = 3
+								self.clear(current_wood)
+							else:
+								return False
 						else:
 							return False
-					else:
-						return False
 
-				self.clear(current_player)
-				self.player_x = self.player_x + self.player_direction
-				self.player_y = self.player_y + 1
-				self.at(self.player_x, self.player_y).type = 2
-				print("Player jumping! New position: " + str(self.player_x) + ", " + str(self.player_y))
+					self.clear(current_player)
+					self.player_x = self.player_x + self.player_direction
+					self.player_y = self.player_y + 1
+					self.at(self.player_x, self.player_y).type = 2
+					print("Player jumping! New position: " + str(self.player_x) + ", " + str(self.player_y))
 
 				
 
@@ -189,6 +189,22 @@ class BD_Level():
 class BD_Game():
 
 	def __init__(self):
+
+		#Load levels
+		counter = 1
+		going = True
+		levels = []
+		while(going):
+			try:
+				lvl = open("level" + str(counter) + ".bdl")
+				levels.append("level" + str(counter) + ".bdl")
+				lvl.close()
+				counter += 1
+			except FileNotFoundError:
+				going = False
+		self.levels = levels
+		self.level_max = counter-1
+
 		self.width = 1920
 		self.height = 1080
 
@@ -213,13 +229,27 @@ class BD_Game():
 
 		pygame.init()
 		self.running = True
+		self.game_over = False
 		self.screen = pygame.display.set_mode((self.width, self.height), pygame.FULLSCREEN)
 
 		self.level_id = 1
+		#self.level_max = 1 #DEBUG DO NOT KEEP
 		self.level_data = []
 		self.has_level = False
 
 		self.pre_level = True #Pre-level information mode
+
+		#Load image files and scale them to our game size
+		self.wood_img = pygame.transform.scale(pygame.image.load("img/wood.jpg").convert_alpha(), (self.block_size, self.block_size))
+		self.bd_img_l = pygame.transform.scale(pygame.image.load("img/block_dude.jpg").convert_alpha(), (self.block_size, self.block_size))
+		self.bd_img_r = pygame.transform.flip(self.bd_img_l, True, False)
+		self.door_img = pygame.transform.scale(pygame.image.load("img/door.jpg").convert_alpha(), (self.block_size, self.block_size))
+		self.has_img = True
+		self.brick_img = pygame.Surface((self.block_size, self.block_size))
+		self.brick_img.fill((0,0,0))
+
+		#Initialize timer
+		self.clock = pygame.time.Clock()
 
 		self.run()
 
@@ -228,7 +258,8 @@ class BD_Game():
 
 		level_fname = "level" + str(self.level_id) + ".bdl"
 		print("Attempting to load level " + str(self.level_id) + " from file \'" + level_fname + "\'")
-		level_file = open(level_fname)
+
+		level_file = open(self.levels[self.level_id-1])
 
 		lines = level_file.readlines()
 		lvl_info = lines[0]
@@ -292,7 +323,7 @@ class BD_Game():
 		self.click_coords = (0,0)
 		while(self.running):
 
-			if(not self.has_level):
+			if(not self.has_level and not self.game_over):
 				self.new_level()
 
 			for e in pygame.event.get():
@@ -315,6 +346,8 @@ class BD_Game():
 						#Move up
 						self.level.player_jump()
 					if key == "space" and self.pre_level:
+						if(self.level_id == 1):
+							self.clock.tick()
 						self.pre_level = False
 
 
@@ -328,11 +361,11 @@ class BD_Game():
 			px = self.level.player_x - self.view_x
 			py = self.level.player_y - self.view_y
 
-			if(px <= 2):
+			if(px <= 3):
 				if(self.view_x - 1 >= 0):
 					print("Adjusting viewport -1")
 					self.view_x = self.view_x - 1
-			elif(12-px <= 2):
+			elif(12-px <= 3):
 				if((self.view_x + 1) + 12 <= self.level.width):
 					print("Adjusting viewport +1")
 					self.view_x = self.view_x + 1
@@ -344,19 +377,38 @@ class BD_Game():
 				self.view_y = self.view_y + 1
 
 
+			#Finish a level
 			if(self.level.player_x == self.level.finish[0] and self.level.player_y == self.level.finish[1]):
-				self.has_level = False
-				self.level_id = self.level_id + 1
+				if(self.level_id+1 > self.level_max and not self.game_over):
+					self.game_over = True
+					self.clock.tick()
+					self.runtime = self.clock.get_time()
+				else:
+					self.has_level = False
+					self.level_id = self.level_id + 1
 
 			self.screen.fill((255, 255, 255))
-			pygame.draw.circle(self.screen, (0, 255, 0), self.click_coords, 5)
+			#pygame.draw.circle(self.screen, (0, 255, 0), self.click_coords, 5)
 
-			self.draw()
+			if(not self.game_over):
+				self.draw()
 
-			if(self.pre_level):
-				self.draw_header()
+				if(self.pre_level):
+					self.draw_header()
+			else:
+				self.draw_gameover()
 
 			pygame.display.flip()
+
+	def draw_gameover(self):
+		font = pygame.font.SysFont("Arial", 64)
+		winText = font.render("You Win!", False, (0, 0, 0))
+		timeText = font.render(str(self.runtime/1000) + "s", False, (255, 0, 0))
+
+		winCoords = (int(self.width-winText.get_width())/2, int((self.height-winText.get_height())/2))
+		timeCoords = (winText.get_rect().x, winText.get_rect().y + 64)
+		self.screen.blit(winText, winCoords)
+		self.screen.blit(timeText, timeCoords)
 
 	def draw_header(self):
 		w = int(self.game_width/.25)
@@ -399,18 +451,33 @@ class BD_Game():
 					pass
 				else:
 
+
 					block_x = (self.block_size * (block.x - self.view_x)) + self.game_x
 					block_y = (self.game_width - (self.block_size * (block.y-self.view_y)) - self.block_size) + self.game_y
 
-					block_rect = pygame.Rect(block_x, block_y, self.block_size, self.block_size)
+					if(self.has_img):
+						img = self.brick_img
+						if(block.type == 3):
+							img = self.wood_img
+						elif(block.type == 2):
+							if(self.level.player_direction == 1):
+								img = self.bd_img_r
+							else:
+								img = self.bd_img_l
+						elif(block.type == 4):
+							img = self.door_img
 
-					color = (0, 0, 0)
-					if(block.type == 2):
-						color = (0, 0, 255)
-					elif(block.type == 3):
-						color = (0, 255, 255)
-					elif(block.type == 4):
-						color = (0, 255, 0)
-					self.screen.fill(color, rect=block_rect)
+						self.screen.blit(img, (block_x, block_y))
+					else:
+						block_rect = pygame.Rect(block_x, block_y, self.block_size, self.block_size)
+
+						color = (0, 0, 0)
+						if(block.type == 2):
+							color = (0, 0, 255)
+						elif(block.type == 3):
+							color = (0, 255, 255)
+						elif(block.type == 4):
+							color = (0, 255, 0)
+						self.screen.fill(color, rect=block_rect)
 
 game = BD_Game()
