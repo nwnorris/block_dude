@@ -196,8 +196,8 @@ class BD_Game():
 		levels = []
 		while(going):
 			try:
-				lvl = open("level" + str(counter) + ".bdl")
-				levels.append("level" + str(counter) + ".bdl")
+				lvl = open("lvl/level" + str(counter) + ".bdl")
+				levels.append("lvl/level" + str(counter) + ".bdl")
 				lvl.close()
 				counter += 1
 			except FileNotFoundError:
