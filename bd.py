@@ -37,6 +37,8 @@ class BD_Block():
 
 class BD_Level():
 
+	#Initializes instance variables, sets all blocks in level to air
+	#A level must be created with a defined id, width, and height
 	def __init__(self, id, w, h):
 		#Width and height are in blocks, not pixels
 		self.id = id
@@ -60,9 +62,12 @@ class BD_Level():
 				row.append(BD_Block(00, j, x))
 			self.contents.append(row)
 
+	#Accessor method for contents
+	#Accessed in y,x order so that array structure matches game structure
 	def at(self, x, y):
 		return self.contents[y][x]
 
+	#Mostly debug function, prints out formatted info about level
 	def toString(self):
 		return "[BD_Level {ID=" + str(self.id) + ", Width=" + str(self.width) + ", Height=" + str(self.height) + "}]"
 
@@ -78,51 +83,51 @@ class BD_Level():
 			self.finish = (block.x, block.y)
 		#print("Added block to level {" + str(self.id) + "} at location " + block.coordsToString())
 
+	#Set a coordinate to air
 	def clear(self, spot):
 		self.at(spot[0], spot[1]).type = 0
 
+	#Pick up or drop wood block
 	def player_interact(self):
 		potential_x = self.player_x + self.player_direction
 		if(potential_x < self.width and potential_x >= 0):
 			if(self.player_holding):
-				if(self.at(self.player_x + self.player_direction, self.player_y).type == 0):
-					print("Ok to drop wood at " + str(self.player_x + self.player_direction) + ", " + str(self.player_y))
+				if(self.at(potential_x, self.player_y).type == 0):
+					print("Ok to drop wood at " + str(potential_x) + ", " + str(self.player_y))
 					y_coord = self.player_y
+					#pseudo-gravity
 					while(y_coord - 1 >= 0 and self.at(potential_x, y_coord-1).type == 0):
 						y_coord = y_coord - 1
-					self.at(self.player_x + self.player_direction, y_coord).type = 3
+					self.at(potential_x, y_coord).type = 3
 					self.at(self.player_x, self.player_y+1).type = 0
 					self.player_holding = False
-				elif(self.at(self.player_x + self.player_direction, self.player_y).type == 3):
+				elif(self.at(potential_x, self.player_y).type == 3 and self.at(potential_x, self.player_y + 1).type  == 0):
 					self.clear((self.player_x, self.player_y+1))
-					self.at(self.player_x + self.player_direction, self.player_y + 1).type = 3
+					self.at(potential_x, self.player_y + 1).type = 3
 					self.player_holding = False
 				else:
-					print("Can't drop wood!")
-					#Todo: gravity
+					print("Can't drop wood!") #Debug
 			else:
-				if(self.at(self.player_x + self.player_direction, self.player_y).type == 3 and self.at(self.player_x + self.player_direction, self.player_y +1).type != 3):
+				if(self.at(potential_x, self.player_y).type == 3 and self.at(potential_x, self.player_y +1).type != 3):
 					print("Found wood in direction!")
 					self.player_holding = True
-					self.at(self.player_x + self.player_direction, self.player_y).type = 0
+					self.at(potential_x, self.player_y).type = 0
 					self.at(self.player_x, self.player_y + 1).type = 3
 				else:
 					print("No wood found to pick up!")
 
+	#Checks if there is air or door directly to the side of the player (facing in a direction)
+	#Returns True if there is a valid space to move to, False if potential square is out of bounds or solid.
 	def player_safeToMove(self, direction):
 		potential_x = self.player_x + direction
-		if(potential_x < self.width and potential_x >= 0):
-			if(self.player_holding):
-				if(self.at(self.player_x+direction, self.player_y).type != 00 and self.at(potential_x, self.player_y).type != 4):
-					print("Found non-air block at " + str(potential_x) + ", " + str(self.player_y))
-					return False
-				return True
-			elif(self.at(potential_x, self.player_y).type != 00 and self.at(potential_x, self.player_y).type != 4):
+		if(potential_x < self.width and potential_x >= 0):	#Check out of bounds
+			if(self.at(potential_x, self.player_y).type != 00 and self.at(potential_x, self.player_y).type != 4): #Check block type
 					return False
 			return True
 		else:
 			return False
 
+	#Move the player vertically -- only move is a diagonal movement in either direction
 	def player_jump(self):
 		potential_x = self.player_x + self.player_direction
 		potential_y = self.player_y + 1
@@ -148,14 +153,11 @@ class BD_Level():
 					self.player_x = self.player_x + self.player_direction
 					self.player_y = self.player_y + 1
 					self.at(self.player_x, self.player_y).type = 2
-					print("Player jumping! New position: " + str(self.player_x) + ", " + str(self.player_y))
-
-				
+					print("Player jumping! New position: " + str(self.player_x) + ", " + str(self.player_y))			
 
 			else:
 				return False
-				
-				
+							
 	#Move the player horizontally
 	def player_move(self, direction):
 		self.player_direction = direction #This needs to happen regardless of if we actually move
@@ -184,10 +186,85 @@ class BD_Level():
 
 				print("Player is now at " + str(self.player_x) + ", " + str(self.player_y))
  
+class BD_StateHandler_Tester():
+		def __init__(self, bdsh):
+			self.state = bdsh
 
+		def pre(self):
+			return self.state.state(0)
+
+		def play(self):
+			return self.state.state(1)
+
+		def end(self):
+			return self.state.state(2)
+
+		def edit(self):
+			return self.state.state(3)
+
+class BD_StateHandler():
+
+	def __init__(self):
+		self.current_state = 0
+		self.status = BD_StateHandler_Tester(self)
+
+	def stateToString(self, id):
+		if(id == 0):
+			return "Pre-Level"
+		elif(id == 1):
+			return "In Level"
+		elif(id == 2):
+			return "Game Over"
+		elif(id == 3):
+			return "Editor"
+
+	def stringToState(self, input):
+		input = input.lower()
+		if(input == "pre-level"):
+			return 0
+		elif(input == "in level"):
+			return 1
+		elif(input == "game over"):
+			return 2
+		elif(input == "editor"):
+			return 3
+
+	def notify(self, id):
+		print("Changing states from " + self.stateToString(self.current_state) + " to " + self.stateToString(id))
+			
+
+	def pre(self):
+		self.notify(0)
+		self.current_state = 0
+
+	def play(self):
+		self.notify(1)
+		self.current_state = 1
+
+	def end(self):
+		self.notify(2)
+		self.current_state = 2
+
+	def edit(self):
+		self.notify(3)
+		self.current_state = 3
+
+	def state(self, id):
+		if(id == self.current_state):
+			return True
+		return False
+
+	def draw(self, bdgame):
+		if(not self.state(2)):
+			bdgame.draw()
+			if(self.state(0)):
+				bdgame.draw_prelevel()
+		elif(self.state(2)):
+			bdgame.draw_gameover()
 
 class BD_Game():
 
+	#Initializes all necessary class variables, checks for level files, loads and assigns image files
 	def __init__(self):
 
 		#Load levels
@@ -229,7 +306,6 @@ class BD_Game():
 
 		pygame.init()
 		self.running = True
-		self.game_over = False
 		self.screen = pygame.display.set_mode((self.width, self.height), pygame.FULLSCREEN)
 
 		self.level_id = 1
@@ -237,7 +313,7 @@ class BD_Game():
 		self.level_data = []
 		self.has_level = False
 
-		self.pre_level = True #Pre-level information mode
+		self.state = BD_StateHandler()
 
 		#Load image files and scale them to our game size
 		self.wood_img = pygame.transform.scale(pygame.image.load("img/wood.jpg").convert_alpha(), (self.block_size, self.block_size))
@@ -253,6 +329,8 @@ class BD_Game():
 
 		self.run()
 
+	#Load a new level into memory
+	#Effectively resets a level
 	def new_level(self):
 		#Parse data from level file
 
@@ -297,7 +375,6 @@ class BD_Game():
 
 					print(block.toString())
 
-
 			if(not lvl.has_player):
 				raise InvalidLevelError
 			if(not lvl.has_finish):
@@ -314,92 +391,96 @@ class BD_Game():
 
 			self.level = lvl
 			self.has_level = True
-			self.pre_level = True
+			self.state.pre()
 		else:
 			print(lvl_info)
 			raise LevelParseError
 
+	#Main game loop
+	#Get user input, manage game state, adjust viewport as necessary
 	def run(self):
 		self.click_coords = (0,0)
 		while(self.running):
 
-			if(not self.has_level and not self.game_over):
+			if(not self.has_level and not self.state.status.end()):
 				self.new_level()
 
 			for e in pygame.event.get():
 				if e.type == pygame.QUIT:
 					self.running = False
 				elif e.type == pygame.KEYDOWN:
+
 					key = pygame.key.name(e.key)
 					if key == "escape":
-						self.running = False
-					if key == "j" and not self.pre_level:
+						if((self.state.status.pre() and self.has_level) or self.state.status.end()):
+							self.running = False
+						else:
+							self.has_level = False
+							self.state.pre()
+					if (key == "j" or key == "a") and not self.state.status.pre():
 						#Move left
 						self.level.player_move(-1)
-					if key == "l" and not self.pre_level:
+					if (key == "l" or key == "d") and not self.state.status.pre():
 						#Move right
 						self.level.player_move(1)
-					if key == "k" and not self.pre_level:
+					if (key == "k" or key == "s") and not self.state.status.pre():
 						self.level.player_interact()
 						#Pickup/drop block
-					if key == "i" and not self.pre_level:
+					if (key == "i" or key == "w") and not self.state.status.pre():
 						#Move up
 						self.level.player_jump()
-					if key == "space" and self.pre_level:
+					if key == "space" and self.state.status.pre():
 						if(self.level_id == 1):
 							self.clock.tick()
-						self.pre_level = False
-
+						self.state.play()
 
 				elif e.type == pygame.MOUSEBUTTONDOWN:
 					self.click_coords = e.pos
 					print("Clicked: " + str(e.pos[0]) + ", " + str(e.pos[1]))
 
-			#Adjust viewport if necessary
-
-			#Compare relative player coordinates to the viewport size
-			px = self.level.player_x - self.view_x
-			py = self.level.player_y - self.view_y
-
-			if(px <= 3):
-				if(self.view_x - 1 >= 0):
-					print("Adjusting viewport -1")
-					self.view_x = self.view_x - 1
-			elif(12-px <= 3):
-				if((self.view_x + 1) + 12 <= self.level.width):
-					print("Adjusting viewport +1")
-					self.view_x = self.view_x + 1
-
-			if(py / float(self.view_y + 12) < self.view_threshold):
-				if(self.view_y - 1 >= 0):
-					self.view_y = self.view_y - 1
-			elif(py / float(self.view_y + 12) >= (1 - self.view_threshold)):
-				self.view_y = self.view_y + 1
-
+			self.adjust_viewport() #Move viewport when player is near edges
 
 			#Finish a level
-			if(self.level.player_x == self.level.finish[0] and self.level.player_y == self.level.finish[1]):
-				if(self.level_id+1 > self.level_max and not self.game_over):
-					self.game_over = True
-					self.clock.tick()
-					self.runtime = self.clock.get_time()
-				else:
-					self.has_level = False
-					self.level_id = self.level_id + 1
+			if (not self.state.status.end()):
+				if(self.level.player_x == self.level.finish[0] and self.level.player_y == self.level.finish[1]):
+					if(self.level_id+1 > self.level_max):
+						self.state.end()
+						self.clock.tick()
+						self.runtime = self.clock.get_time()
+					else:
+						self.has_level = False
+						self.state.pre()
+						self.level_id = self.level_id + 1
 
-			self.screen.fill((255, 255, 255))
+			self.screen.fill((255, 255, 255)) #Clear screen
 			#pygame.draw.circle(self.screen, (0, 255, 0), self.click_coords, 5)
 
-			if(not self.game_over):
-				self.draw()
-
-				if(self.pre_level):
-					self.draw_header()
-			else:
-				self.draw_gameover()
+			self.state.draw(self)
 
 			pygame.display.flip()
 
+	def adjust_viewport(self):
+		#Adjust viewport if necessary
+		#Compare relative player coordinates to the viewport size
+		px = self.level.player_x - self.view_x
+		py = self.level.player_y - self.view_y
+
+		if(px <= 3):
+			if(self.view_x - 1 >= 0):
+				print("Adjusting viewport -1")
+				self.view_x = self.view_x - 1
+		elif(12-px <= 3):
+			if((self.view_x + 1) + 12 <= self.level.width):
+				print("Adjusting viewport +1")
+				self.view_x = self.view_x + 1
+
+		if(py / float(self.view_y + 12) < self.view_threshold):
+			if(self.view_y - 1 >= 0):
+				self.view_y = self.view_y - 1
+		elif(py / float(self.view_y + 12) >= (1 - self.view_threshold)):
+			self.view_y = self.view_y + 1
+
+	#Display the game over screen
 	def draw_gameover(self):
 		font = pygame.font.SysFont("Arial", 64)
 		winText = font.render("You Win!", False, (0, 0, 0))
@@ -410,27 +491,22 @@ class BD_Game():
 		self.screen.blit(winText, winCoords)
 		self.screen.blit(timeText, timeCoords)
 
-	def draw_header(self):
+	#Render the pre-level text on the screen
+	def draw_prelevel(self):
 		w = int(self.game_width/.25)
 		h = int(self.game_width * .75)
-		header = pygame.Surface((w, h))
-
-		fullRect = header.get_rect()
-		header.fill((0, 0, 0), rect=fullRect)
-		header.fill((255, 255, 255), rect=pygame.Rect(fullRect.x + 10, fullRect.y + 10, fullRect.width - 10, fullRect.height - 10))
-
+		
 		font = pygame.font.SysFont("Arial", 64)
 		level_txt = font.render("Level " + str(self.level.id), False, (0, 0, 0))
 
 		font2 = pygame.font.SysFont("Arial", 32)
 		instruction = font2.render("Press spacebar to begin.", False, (0, 0, 0))
 
-		textpos = (h/2, int((w/.75)/2))
-		header.blit(level_txt, textpos)
-
 		self.screen.blit(level_txt, (self.game_x + self.game_x/4, self.game_y + self.game_width/3))
 		self.screen.blit(instruction, (self.game_x + self.game_x/4, self.game_y + self.game_width/3 + 64))
 	
+	#Draw the current viewport on the screen
+	#Viewport is a 12 block by 12 block section of the current level
 	def draw(self):
 		#Draw self border
 		pygame.draw.rect(self.screen, (0, 0, 0), pygame.Rect(self.game_x, self.game_y, self.game_width, self.game_width), 2)
